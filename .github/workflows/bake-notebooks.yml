@@ -1,0 +1,65 @@
+name: Bake Notebooks
+
+on:
+  push:
+    branches:
+      - 'solutions/**'
+    paths:
+      - 'code/solutions/*.ipynb'
+
+jobs:
+  bake-notebooks:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout solution branch
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jupyter nbconvert
+          
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          
+      - name: Checkout main branch
+        run: |
+          git checkout main
+          
+      - name: Merge solution branch
+        run: |
+          git merge ${{ github.ref }} -m "Merge solution updates from ${{ github.ref_name }}"
+          
+      - name: Find changed notebooks
+        id: find_notebooks
+        run: |
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep "code/solutions/.*_solutions\.ipynb" || echo "")
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No solution notebooks changed, skipping bake"
+            echo "notebooks=" >> $GITHUB_OUTPUT
+          else
+            echo "notebooks=$CHANGED_FILES" >> $GITHUB_OUTPUT
+            echo "Changed notebooks: $CHANGED_FILES"
+          fi
+          
+      - name: Bake notebooks
+        if: steps.find_notebooks.outputs.notebooks != ''
+        run: |
+          python code/support_files/bake_notebooks.py ${{ steps.find_notebooks.outputs.notebooks }}
+          
+      - name: Commit and push changes
+        if: steps.find_notebooks.outputs.notebooks != '' && success()
+        run: |
+          git add code/*.ipynb code/solutions/html/*.html
+          git commit -m "Auto-bake notebooks from ${{ github.ref_name }}" || echo "No changes to commit"
+          git push origin main

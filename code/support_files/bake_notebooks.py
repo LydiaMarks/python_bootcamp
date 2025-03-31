@@ -331,4 +331,8 @@ if __name__ == '__main__':
     parser.add_argument('files', help='Notebook files to bake', nargs='+')
     args = parser.parse_args()
 
-    bake_all_notebooks(args.files)
+    # Convert any relative paths to absolute paths
+    abs_files = [os.path.abspath(f) for f in args.files]
+    print(f"Baking notebooks: {abs_files}")
+    
+    bake_all_notebooks(abs_files)
